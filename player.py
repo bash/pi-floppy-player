@@ -1,23 +1,25 @@
-import dbus
 from glob import iglob
 import pyudev
 import subprocess
 import time
 import logging
 import os.path as path
+import gi
+from gi.repository import Gio
+from gi.repository.Gio import DBusProxy, BusType, DBusProxyFlags, DBusCallFlags
+from gi.repository.GLib import Variant
 
 # Prerequisites:
 # * pip install pyudev
-# * pip install dbus
 # * apt install mplayer
 
 # UDisks2 Docs: http://storaged.org/doc/udisks2-api/2.10.1/
 # pyudev Docs: https://pyudev.readthedocs.io/en/latest/
+# Raspberry Pi OS does not allow users to mount using udisks2,
+# fix polkit policy: https://github.com/coldfix/udiskie/wiki/Permissions but remove if and always return policy.
 
 UDISKS2_BUS = 'org.freedesktop.UDisks2'
 FILE_SYSTEM_IFACE = 'org.freedesktop.UDisks2.Filesystem'
-
-bus = dbus.SystemBus()
 
 def get_floppy_disk_devices():
     """Returns an array of all floppy disk devices. Note that the devices may or may not have a floppy disk inserted"""
@@ -34,24 +36,31 @@ def has_disk_inserted(device):
     size = device.attributes.asint('size')
     return size > 0
 
-def get_udisk_block_device(bus_connection, device):
-    """Gets the block device associated with the given device"""
-    return bus_connection.get_object(UDISKS2_BUS, f'/org/freedesktop/UDisks2/block_devices/{device.sys_name}')
+def get_udisk_block_device_as_file_system(device):
+    """Gets the block device associated with the given device as file system"""
+    return DBusProxy.new_for_bus_sync(
+        BusType.SYSTEM,
+        DBusProxyFlags.NONE,
+        None,
+        UDISKS2_BUS,
+        f'/org/freedesktop/UDisks2/block_devices/{device.sys_name}',
+        FILE_SYSTEM_IFACE, None)
 
-def mount(bus_connection, device):
+def mount(device):
     """Mounts a device and returns the mount path"""
-    file_system = dbus.Interface(get_udisk_block_device(bus_connection, device), FILE_SYSTEM_IFACE)
-    return file_system.Mount({})
+    file_system = get_udisk_block_device_as_file_system(device)
+    mount_path, = file_system.call_sync('Mount', Variant("(a{sv})", ({},)), DBusCallFlags.NONE, -1, None).unpack()
+    return mount_path
 
-def unmount(bus_connection, device):
+def unmount(device):
     """Unmounts a device"""
-    file_system = dbus.Interface(get_udisk_block_device(bus_connection, device), FILE_SYSTEM_IFACE)
-    return file_system.Unmount({})
+    file_system = get_udisk_block_device_as_file_system(device)
+    return file_system.call_sync('Unmount', Variant("(a{sv})", ({},)), DBusCallFlags.NONE, -1, None)
 
-def get_mount_points(bus_connection, device):
+def get_mount_points(device):
     """Gets a list of mount points for the given device"""
-    properties = dbus.Interface(get_udisk_block_device(bus_connection, device), dbus.PROPERTIES_IFACE)
-    return decode_mount_points(properties.Get(FILE_SYSTEM_IFACE, 'MountPoints'))
+    file_system = get_udisk_block_device_as_file_system(device)
+    return decode_mount_points(file_system.get_cached_property('MountPoints'))
 
 def decode_mount_points(mount_points):
     # The `MountPoints` property is an array of null-terminated byte arrays
@@ -70,7 +79,6 @@ def play_audio_files(directory):
 logging.basicConfig(level=logging.INFO)
 
 played = set()
-bus = dbus.SystemBus()
 # TODO: clear played when device itself is removed
 
 while True:
@@ -81,10 +89,10 @@ while True:
         if has_disk and not has_played:
             logging.info(f'Playing from {device.sys_name}')
             played.add(device.sys_name)
-            mount_points = get_mount_points(bus, device)
-            mount_path = mount(bus, device) if len(mount_points) == 0 else mount_points[0]
+            mount_points = get_mount_points(device)
+            mount_path = mount(device) if len(mount_points) == 0 else mount_points[0]
             play_audio_files(mount_path)
-            unmount(bus, device)
+            unmount(device)
             logging.info(f'Finished playing from {device.sys_name}. You can remove the disk.')
 
         if not has_disk:
