@@ -4,7 +4,12 @@ import pyudev
 import subprocess
 import time
 import logging
-import os.path
+import os.path as path
+
+# Prerequisites:
+# * pip install pyudev
+# * pip install dbus
+# * apt install mplayer
 
 # UDisks2 Docs: http://storaged.org/doc/udisks2-api/2.10.1/
 # pyudev Docs: https://pyudev.readthedocs.io/en/latest/
@@ -56,15 +61,36 @@ def play_audio_files(directory):
     """Plays all audio files in the given directory"""
     for audio_file in iglob('*.mp3', root_dir=directory):
         audio_file_path = path.join(directory, audio_file)
+        logging.info(f'Playing {audio_file_path}')
         try:
-            subprocess.check_call(['mplayer', audio_file_path])
+            subprocess.check_call(['mplayer', '-quiet', '--', audio_file_path])
         except e:
             logging.warn(f'Failed to play audio file {audio_file_path}: {e}')
 
+logging.basicConfig(level=logging.INFO)
+
 played = set()
+bus = dbus.SystemBus()
 # TODO: clear played when device itself is removed
 
-print(get_floppy_disk_devices())
+while True:
+    for device in get_floppy_disk_devices():
+        has_disk = has_disk_inserted(device)
+        has_played = device.sys_name in played
+
+        if has_disk and not has_played:
+            logging.info(f'Playing from {device.sys_name}')
+            played.add(device.sys_name)
+            mount_points = get_mount_points(bus, device)
+            mount_path = mount(bus, device) if len(mount_points) == 0 else mount_points[0]
+            play_audio_files(mount_path)
+            unmount(bus, device)
+            logging.info(f'Finished playing from {device.sys_name}. You can remove the disk.')
+
+        if not has_disk:
+            played.discard(device.sys_name)
+
+    time.sleep(5)
 
 # while True:
 #     for device in context.list_devices(subsystem='block', DEVTYPE='disk'):
