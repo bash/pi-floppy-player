@@ -1,0 +1,7 @@
+polkit.addRule(function(action, _subject) {
+  var YES = polkit.Result.YES
+  var permissions = {
+    "org.freedesktop.udisks2.filesystem-mount": YES,
+  }
+  return permissions[action.id]
+})

@@ -1,0 +1,11 @@
+[Unit]
+Description=Auto-plays MP3 files from floppy disks.
+
+[Service]
+ExecStart=$HOME/.local/bin/floppy-player
+Restart=always
+RestartSec=10
+Slice=session.slice
+
+[Install]
+WantedBy=default.target
