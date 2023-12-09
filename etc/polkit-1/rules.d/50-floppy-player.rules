@@ -1,7 +1,10 @@
+// Adapted from: https://github.com/coldfix/udiskie/wiki/Permissions
 polkit.addRule(function(action, _subject) {
   var YES = polkit.Result.YES
   var permissions = {
     "org.freedesktop.udisks2.filesystem-mount": YES,
+    "org.freedesktop.udisks2.filesystem-mount-other-seat": YES,
+    "org.freedesktop.udisks2.filesystem-unmount-others": YES,
   }
   return permissions[action.id]
 })
