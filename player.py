@@ -20,8 +20,9 @@ FILE_SYSTEM_IFACE = 'org.freedesktop.UDisks2.Filesystem'
 DISPLAY = Display()
 
 def floppy_player():
-    show('I')
+    show_idle_state()
     logging.basicConfig(level=logging.INFO)
+    play_from_already_inserted_device()
     monitor_floppy_disk_devices(on_floppy_disk_device_changed)
 
 def monitor_floppy_disk_devices(on_device_change):
@@ -41,7 +42,24 @@ def on_floppy_disk_device_changed(device):
         if has_disk_inserted(device):
             play_audio_files_from_device(device)
         else:
-            show('I')
+            show_idle_state()
+
+def play_from_already_inserted_device():
+    for device in get_floppy_disk_devices():
+        if has_disk_inserted(device):
+            play_audio_files_from_device(device)
+
+def get_floppy_disk_devices():
+    """Returns an array of all floppy disk devices. Note that the devices may or may not have a floppy disk inserted"""
+    context = pyudev.Context()
+    devices = context.list_devices(subsystem='block', DEVTYPE='disk')
+    return [d for d in devices if is_floppy_disk_device(d)]
+
+def show_idle_state():
+    if len(get_floppy_disk_devices()) == 0:
+        show('0')
+    else:
+        show('I')
 
 def play_audio_files_from_device(device):
     show('P', busy=True)
