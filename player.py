@@ -10,14 +10,17 @@ import gi
 from gi.repository import Gio
 from gi.repository.Gio import DBusProxy, BusType, DBusProxyFlags, DBusCallFlags
 from gi.repository.GLib import Variant
+from floppy_player import Display
 
 # UDisks2 Docs: http://storaged.org/doc/udisks2-api/2.10.1/
 # pyudev Docs: https://pyudev.readthedocs.io/en/latest/
-
 UDISKS2_BUS = 'org.freedesktop.UDisks2'
 FILE_SYSTEM_IFACE = 'org.freedesktop.UDisks2.Filesystem'
 
+DISPLAY = Display()
+
 def floppy_player():
+    show('I')
     logging.basicConfig(level=logging.INFO)
     monitor_floppy_disk_devices(on_floppy_disk_device_changed)
 
@@ -34,16 +37,23 @@ def monitor_floppy_disk_devices(on_device_change):
     observer.start()
 
 def on_floppy_disk_device_changed(device):
-    if is_disk_media_change(device) and has_disk_inserted(device):
-        play_audio_files_from_device(device)
+    if is_disk_media_change(device):
+        if has_disk_inserted(device):
+            play_audio_files_from_device(device)
+        else:
+            show('I')
 
 def play_audio_files_from_device(device):
+    show('P', busy=True)
     try:
         mount_path = mount(device)
+        show('P')
         play_audio_files(mount_path)
+        show('E', busy=True)
         unmount(device)
-    except e:
+    except Exception as e:
         logging.warn(f'Failed to play from {device.sys_name}: {e}')
+    show('E')
 
 def is_floppy_disk_device(device):
     """Tests if the given device is a floppy disk device"""
@@ -86,8 +96,11 @@ def play_audio_files(directory):
         logging.info(f'Playing {audio_file_path}')
         try:
             subprocess.check_call(['mplayer', '-quiet', '--', audio_file_path])
-        except e:
+        except Exception as e:
             logging.warn(f'Failed to play audio file {audio_file_path}: {e}')
+
+def show(symbol, busy=False):
+    DISPLAY.show(symbol, busy)
 
 if __name__ == '__main__':
     floppy_player()

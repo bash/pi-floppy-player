@@ -2,7 +2,7 @@
 Description=Auto-plays MP3 files from floppy disks.
 
 [Service]
-ExecStart=$HOME/.local/bin/floppy-player
+ExecStart=$HOME/.local/opt/floppy-player/player.py
 Restart=always
 RestartSec=10
 Slice=session.slice

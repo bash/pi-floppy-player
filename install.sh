@@ -2,17 +2,20 @@
 
 set -e
 
-# Install dependencies
-sudo apt-get install -y python3-pyudev python3-gi mplayer
+if [[ -z "$SKIP_DEPS" ]]
+then
+    # Install dependencies
+    sudo apt-get install -y python3-pyudev python3-gi mplayer
+fi
 
 # Enable user linger so that our user service
 # is started on boot and kept around.
 loginctl enable-linger "$USER"
 
-BIN_DIR="$HOME/.local/bin/"
-mkdir -p "$BIN_DIR"
-cp player.py "$BIN_DIR/floppy-player"
-chmod +x "$BIN_DIR/floppy-player"
+INSTALL_DIR="$HOME/.local/opt/floppy-player"
+mkdir -p "$INSTALL_DIR"
+cp -R {player.py,floppy_player} "$INSTALL_DIR/"
+chmod +x "$INSTALL_DIR/player.py"
 
 SERVICES_DIR="$HOME/.config/systemd/user/"
 mkdir -p "$SERVICES_DIR"
